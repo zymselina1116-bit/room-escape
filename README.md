@@ -1,83 +1,129 @@
-# Dream Room Escape 🌟
+# Dreamcore 3D Portal Experience
 
-An immersive 3D interactive narrative game built with Three.js. Wake up in a luminous European-style room and discover multiple paths to different endings.
-
-## Game Overview
-
-You awaken in a beautiful sunlit room that feels almost too perfect — as if within a dream. The space is filled with warm light reflecting off cream-colored walls and polished wooden surfaces. Each significant object emits a faint, inviting glow, beckoning you to explore.
-
-## How to Play
-
-### Controls
-- **Movement**: Arrow Keys or WASD
-- **Look Around**: Hold Left Mouse Button and Drag
-- **Interact**: Click on glowing objects
-
-### Exploration
-Move through the room and interact with various objects:
-- Writing desk with a mysterious note
-- Patterned carpet
-- Sunlit window
-- Two wooden doors (Door A and Door B)
-- Bookshelf with a photo frame
-- Framed painting
-
-## Multiple Endings
-
-The game features multiple narrative paths and endings:
-
-### 🌀 **Ending A: Room of Echoes**
-Discover what lies beneath the carpet and descend into the basement. But beware — not all paths lead to escape.
-
-### ☀️ **Ending B: Fall of Light**
-The window offers a breathtaking view and a choice: to step outside or remain. What awaits beyond?
-
-### ✨ **Ending C: Dispersed Memory**
-Door A leads to a corridor of glowing light where gravity and reality itself begin to fade.
-
-### 💧 **Ending D: Water of Rebirth**
-Door B reveals a tranquil pool with a glowing whirlpool at its center. Some endings are just new beginnings.
-
-### 🌿 **Ending E: Gentle Cage**
-Hidden secrets await those who look closer. The painting holds more than meets the eye, and the bookshelf guards a crucial clue (hint: look for the numbers).
+An immersive web-based 3D interactive experience built with React Three Fiber, featuring dreamcore aesthetics and mystery exploration.
 
 ## Features
 
-- **Full 3D Environment**: Explore a detailed European-style room with realistic lighting
-- **Smooth Controls**: Natural keyboard and mouse controls for immersive exploration
-- **Interactive Objects**: Click on glowing items to examine and interact
-- **Multiple Endings**: Your choices determine your fate
-- **Atmospheric Design**: Warm tones, soft lighting, and a dreamlike atmosphere
+### Origin Room
+- Bright European-style room (16×9×16 units) with cream plaster walls and polished wood floor
+- Three permanent, re-enterable portals:
+  - **North Wall**: Large arched wooden door → Hallway Scene
+  - **East Wall**: Tall glass door → Pool Scene
+  - **West Wall**: Tall window → Garden Scene
+- Soft daylight with volumetric rays
+- Subtle variations on each return (light angle ±3°, clock tempo ±2%)
+
+### Pool Scene
+- Long corridor of repeating round arches (radius ~6, spacing 10)
+- White tiles with animated ripples and caustics
+- Green-blue water plane with shader effects
+- Soft green-white lamps along the corridor
+- Glass door portal returns to origin
+
+### Garden Scene
+- Bright conservatory with glass roof
+- Hanging pots and planter beds with daisies
+- Overexposed warm sunlight with floating dust motes
+- Gentle plant swaying animation
+- Window portal returns to origin
+
+### Hallway Scene
+- Endless stone arcade with repeating arches
+- Glossy stone floor and warm wall lamps
+- Lamp warmth decreases with distance
+- Fog cutoff to imply infinity
+- Large arched door returns to origin
+
+## Controls
+
+- **Movement**: WASD or Arrow keys for smooth floating movement (speed ~7.5)
+- **Look**: Mouse drag to rotate camera
+- **Zoom**: Mouse wheel (reversed: scroll down to zoom in)
+  - FOV range: 28°-75°
+- **Camera Start**: Position (0, 1.6, 4), looks at origin
+
+## Portal Mechanics
+
+Portals trigger when:
+1. Player is facing the portal
+2. Portal center is within ±25% of screen center
+3. Distance < 2.5m
+
+All portals remain after use and are always re-enterable.
 
 ## Technical Details
 
-- Built with **Three.js** for 3D rendering
-- Pure HTML/CSS/JavaScript — no build process required
-- Responsive design
-- Runs entirely in the browser
+### Rendering
+- ACESFilmic tone mapping (exposure 1.2)
+- Soft PCF shadows (2048² shadow maps)
+- FogExp2 (density ~0.008, near feel 25, far feel 90)
 
-## Running the Game
+### Post-Processing
+- Subtle Bloom
+- Very low Chromatic Aberration
+- Soft Vignette
+- Slight Depth of Field
 
-Simply open `index.html` in a modern web browser. No installation or build process required!
+### Audio
+- **Origin**: Low air hum + distant birds + gentle irregular ticking
+- **Pool**: Water ambience + gentle drip sounds
+- **Garden**: Wind + bird chirps
+- **Hallway**: Low drone + reverb echoes
 
-Recommended browsers:
-- Chrome
-- Firefox
-- Edge
-- Safari
+### Performance
+- Adaptive DPR for mobile devices
+- Smooth 60 FPS target
+- Optimized instancing for repeated geometry
 
-## Tips
+## Development
 
-1. Take your time to explore every object
-2. Some objects may have hidden features — try examining them thoroughly
-3. Pay attention to the note on the desk for hints
-4. The photo frame on the bookshelf might be important...
-5. Different choices lead to different endings — try them all!
+```bash
+# Install dependencies
+npm install --legacy-peer-deps
 
-## Atmosphere
+# Start development server
+npm run dev
 
-The game maintains a serene, symbolic, and dreamlike mood throughout. There are no frightening or violent elements — only peaceful exploration and philosophical endings about dreams, reality, and escape.
+# Build for production
+npm run build
+```
 
----
+## Aesthetic
 
-*"Every door leads somewhere, but not all roads leave the room."*
+**Dreamcore × Mystery**
+- Calm and slightly uncanny atmosphere
+- Warm whites, faded golds, muted sky blues, desaturated browns
+- No text UI - pure diegetic interaction
+- Transitions conveyed through light, motion, and sound
+
+## Project Structure
+
+```
+src/
+├── components/
+│   ├── Experience.jsx          # Main scene container
+│   ├── Controls.jsx            # Camera and input controls
+│   ├── SceneManager.jsx        # Scene state management
+│   ├── Portal.jsx              # Reusable portal component
+│   ├── PostProcessing.jsx      # Visual effects
+│   ├── AudioManager.jsx        # Procedural audio system
+│   ├── IntroText.jsx           # Intro fade text
+│   └── scenes/
+│       ├── OriginRoom.jsx      # Main hub room
+│       ├── PoolScene.jsx       # Tiled pool corridor
+│       ├── GardenScene.jsx     # Glass conservatory
+│       └── HallwayScene.jsx    # Stone arcade
+├── App.jsx                     # Root component
+├── main.jsx                    # Entry point
+└── styles.css                  # Global styles
+```
+
+## Credits
+
+Built with:
+- [React](https://react.dev/)
+- [Three.js](https://threejs.org/)
+- [React Three Fiber](https://docs.pmnd.rs/react-three-fiber)
+- [@react-three/drei](https://github.com/pmndrs/drei)
+- [@react-three/postprocessing](https://github.com/pmndrs/react-postprocessing)
+- [Vite](https://vitejs.dev/)
