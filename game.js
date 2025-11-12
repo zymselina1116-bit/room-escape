@@ -1,3 +1,12 @@
+// Check if THREE.js is loaded
+if (typeof THREE === 'undefined') {
+    console.error('THREE.js failed to load!');
+    document.getElementById('loading').textContent = 'Error: THREE.js failed to load. Please refresh the page.';
+    throw new Error('THREE.js not loaded');
+}
+
+console.log('THREE.js loaded successfully:', THREE.REVISION);
+
 // ===== GAME STATE =====
 const gameState = {
     playerPosition: { x: 0, y: 1.6, z: 0 },
