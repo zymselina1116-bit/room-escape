@@ -1,7 +1,7 @@
 // Check if THREE.js is loaded
 if (typeof THREE === 'undefined') {
     console.error('THREE.js failed to load!');
-    document.getElementById('loading').textContent = 'Error: THREE.js failed to load. Please refresh the page.';
+    alert('Error: THREE.js failed to load. Please refresh the page.');
     throw new Error('THREE.js not loaded');
 }
 
@@ -504,9 +504,6 @@ function initScene() {
     createDoor('doorB', [-4.9, 1.25, 2], Math.PI / 2);
     createBookshelf();
     createPainting();
-
-    // Hide loading
-    document.getElementById('loading').style.display = 'none';
 }
 
 // ===== PLAYER CONTROLS =====
