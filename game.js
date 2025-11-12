@@ -18,14 +18,16 @@ const gameState = {
     currentInteractable: null,
     carpetLifted: false,
     inBasement: false,
-    ended: false
+    ended: false,
+    narrativeShown: false,
+    secretGardenUnlocked: false
 };
 
 // ===== SCENE SETUP =====
 const canvas = document.getElementById('canvas');
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf5e6d3);
-scene.fog = new THREE.Fog(0xf5e6d3, 20, 50);
+scene.background = new THREE.Color(0xfff8f0); // Warmer, brighter background
+scene.fog = new THREE.Fog(0xfff8f0, 15, 40);
 
 // Camera
 const camera = new THREE.PerspectiveCamera(
@@ -44,6 +46,17 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2; // Slightly brighter for dreamcore aesthetic
+
+// NOTE: For advanced post-processing effects (bloom, chromatic aberration, depth blur),
+// you would need to include the Three.js post-processing libraries:
+// - EffectComposer
+// - RenderPass
+// - UnrealBloomPass
+// - ChromaticAberrationShader (custom)
+// - BokehPass (for depth blur)
+// These require additional script imports from three/examples/jsm/postprocessing/
 
 // Raycaster for interactions
 const raycaster = new THREE.Raycaster();
@@ -51,13 +64,13 @@ const mouse = new THREE.Vector2();
 
 // ===== LIGHTING =====
 function setupLighting() {
-    // Ambient light for overall illumination
-    const ambientLight = new THREE.AmbientLight(0xfff8e7, 0.6);
+    // Ambient light for overall illumination - warmer tone
+    const ambientLight = new THREE.AmbientLight(0xfff8e7, 0.7);
     scene.add(ambientLight);
 
-    // Main sunlight from window
-    const sunLight = new THREE.DirectionalLight(0xfff4d6, 1.0);
-    sunLight.position.set(5, 8, 5);
+    // Main sunlight from window - bright and warm
+    const sunLight = new THREE.DirectionalLight(0xfffaf0, 1.2);
+    sunLight.position.set(5, 8, 3);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
@@ -69,15 +82,20 @@ function setupLighting() {
     sunLight.shadow.camera.bottom = -10;
     scene.add(sunLight);
 
-    // Warm fill light
-    const fillLight = new THREE.PointLight(0xffe4b5, 0.4, 20);
+    // Warm fill light - faded gold
+    const fillLight = new THREE.PointLight(0xffd700, 0.3, 20);
     fillLight.position.set(-3, 3, 0);
     scene.add(fillLight);
 
-    // Additional warm light
-    const warmLight = new THREE.PointLight(0xffd7a3, 0.3, 15);
-    warmLight.position.set(3, 2, -3);
-    scene.add(warmLight);
+    // Sky blue accent light
+    const skyLight = new THREE.PointLight(0x87ceeb, 0.2, 15);
+    skyLight.position.set(3, 2, -3);
+    scene.add(skyLight);
+
+    // Additional warm glow near window
+    const glowLight = new THREE.PointLight(0xffe4b5, 0.5, 12);
+    glowLight.position.set(4, 2, 0);
+    scene.add(glowLight);
 }
 
 // ===== MATERIALS =====
@@ -494,7 +512,68 @@ function createPainting() {
     return paintingGroup;
 }
 
+// ===== DUST PARTICLES =====
+function createDustParticles() {
+    const particleCount = 200;
+    const particles = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const velocities = [];
+
+    for (let i = 0; i < particleCount * 3; i += 3) {
+        positions[i] = (Math.random() - 0.5) * 10;     // x
+        positions[i + 1] = Math.random() * 4;          // y
+        positions[i + 2] = (Math.random() - 0.5) * 10; // z
+
+        velocities.push({
+            x: (Math.random() - 0.5) * 0.002,
+            y: Math.random() * 0.005 + 0.001,
+            z: (Math.random() - 0.5) * 0.002
+        });
+    }
+
+    particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const particleMaterial = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.02,
+        transparent: true,
+        opacity: 0.3,
+        sizeAttenuation: true
+    });
+
+    const particleSystem = new THREE.Points(particles, particleMaterial);
+    scene.add(particleSystem);
+
+    // Animation function for dust
+    function animateDust() {
+        const positions = particleSystem.geometry.attributes.position.array;
+
+        for (let i = 0; i < particleCount; i++) {
+            const idx = i * 3;
+
+            positions[idx] += velocities[i].x;
+            positions[idx + 1] += velocities[i].y;
+            positions[idx + 2] += velocities[i].z;
+
+            // Reset particles that go too high
+            if (positions[idx + 1] > 4) {
+                positions[idx + 1] = 0;
+            }
+
+            // Keep particles within room bounds
+            if (Math.abs(positions[idx]) > 5) positions[idx] *= -0.9;
+            if (Math.abs(positions[idx + 2]) > 5) positions[idx + 2] *= -0.9;
+        }
+
+        particleSystem.geometry.attributes.position.needsUpdate = true;
+    }
+
+    return animateDust;
+}
+
 // ===== INITIALIZE SCENE =====
+let dustAnimation = null;
+
 function initScene() {
     document.getElementById('debug').textContent = 'Building scene...';
     setupLighting();
@@ -506,6 +585,7 @@ function initScene() {
     createDoor('doorB', [-4.9, 1.25, 2], Math.PI / 2);
     createBookshelf();
     createPainting();
+    dustAnimation = createDustParticles();
     document.getElementById('debug').textContent = 'Scene ready! Controls: WASD/Arrows + Mouse';
 
     // Hide debug after 3 seconds
@@ -516,13 +596,35 @@ function initScene() {
             if (debugEl) debugEl.style.display = 'none';
         }, 1000);
     }, 3000);
+
+    // Show opening narrative after 4 seconds
+    setTimeout(() => {
+        showOpeningNarrative();
+    }, 4000);
+}
+
+// ===== OPENING NARRATIVE =====
+function showOpeningNarrative() {
+    if (gameState.narrativeShown) return;
+    gameState.narrativeShown = true;
+
+    showNarrative(
+        '',
+        'You awaken in a room that is beautiful, too bright, too still, as if the world has paused to watch you, and every object quietly suggests that you have been here before and will be again.',
+        []
+    );
+
+    // Auto-hide after 8 seconds
+    setTimeout(() => {
+        hideNarrative();
+    }, 8000);
 }
 
 // ===== PLAYER CONTROLS =====
 function updatePlayerMovement(delta) {
     if (gameState.ended) return;
 
-    const moveSpeed = 2.5 * delta;
+    const moveSpeed = 1.5 * delta; // Slower, more floating movement
     const forward = new THREE.Vector3();
     const right = new THREE.Vector3();
 
@@ -698,7 +800,34 @@ function handleInteraction() {
                 []
             );
             break;
+
+        case 'picnicMat':
+            showNarrative(
+                'The Glowing Picnic Mat',
+                'You sit on the warm, glowing mat. The breeze is gentle, the rabbits peaceful. This suspended garden feels timeless — a place between dreams and reality.',
+                [
+                    { text: 'Rest here forever', action: () => finalGardenEnding() },
+                    { text: 'Stand up', action: () => hideNarrative() }
+                ]
+            );
+            break;
     }
+}
+
+// ===== FINAL GARDEN ENDING =====
+function finalGardenEnding() {
+    hideNarrative();
+    gameState.ended = true;
+
+    const overlay = document.getElementById('ending-overlay');
+    overlay.classList.add('active', 'fade');
+
+    setTimeout(() => {
+        showEnding(
+            'You Have Found Peace',
+            'In this suspended garden, time loses meaning. The rabbits hop silently. The wind whispers secrets of forgotten dreams.\n\nYou close your eyes...\n\nPerhaps this is the true escape... or the gentlest cage of all.'
+        );
+    }, 2000);
 }
 
 // ===== NARRATIVE SYSTEM =====
@@ -786,7 +915,7 @@ function submitCode() {
     } else {
         showNarrative(
             'Incorrect Code',
-            'The keypad beeps softly. The code is incorrect. Perhaps there's a clue somewhere in the room?',
+            'The keypad beeps softly. The code is incorrect. Perhaps there is a clue somewhere in the room?',
             []
         );
         codePanel.classList.remove('show');
@@ -830,36 +959,160 @@ function endingDispersedMemory() {
 
 function endingWaterOfRebirth() {
     hideNarrative();
-    gameState.ended = true;
 
+    // Quick fade transition
     const overlay = document.getElementById('ending-overlay');
     overlay.classList.add('active', 'fade');
 
     setTimeout(() => {
-        showEnding(
+        // Reset player position immediately
+        camera.position.set(0, 1.6, 0);
+        gameState.cameraRotation = { x: 0, y: 0 };
+        camera.rotation.set(0, 0, 0);
+
+        // Clear fade
+        overlay.classList.remove('active', 'fade');
+
+        // Show brief message
+        showNarrative(
             'Ending D: Water of Rebirth',
-            'You step through Door B into sunlight and the sound of water.\n\nA tranquil pool stretches before you, glowing softly. At its center, water spins into a luminous whirl.\n\nDrawn by an invisible pull, you approach. The whirlpool reaches for you.\n\nThe world spins — light, water, warmth...\n\n...and you awaken again in the sunlit room, as if from a dream.'
+            'The whirlpool draws you in... and you return to where you began.',
+            []
         );
 
-        // Special: restart after this ending
         setTimeout(() => {
-            location.reload();
-        }, 8000);
-    }, 2000);
+            hideNarrative();
+        }, 3000);
+    }, 1500);
 }
 
 function endingGentleCage() {
-    gameState.ended = true;
+    hideNarrative();
+    gameState.secretGardenUnlocked = true;
 
-    const overlay = document.getElementById('ending-overlay');
-    overlay.classList.add('active', 'fade');
+    // Create secret garden scene
+    createSecretGarden();
+
+    showNarrative(
+        'Ending E: Gentle Cage',
+        'The keypad accepts the code. A hidden panel slides open, revealing a suspended garden of green grass and soft wind. Silent white rabbits hop peacefully. A glowing picnic mat awaits you.',
+        []
+    );
 
     setTimeout(() => {
-        showEnding(
-            'Ending E: Gentle Cage',
-            'The keypad beeps softly. A hidden panel slides open in the wall.\n\nBeyond it lies a secret garden — green grass, soft wind, and white rabbits hopping peacefully.\n\nWarm sunlight bathes everything in gold. A picnic mat waits beneath a willow tree.\n\nYou lie down, feeling the gentle breeze. Your eyes grow heavy.\n\nPerhaps this is the true escape... or the gentlest cage of all.'
+        hideNarrative();
+    }, 5000);
+}
+
+// ===== SECRET GARDEN =====
+function createSecretGarden() {
+    // Clear existing room objects (fade them out)
+    scene.children.forEach(child => {
+        if (child.userData && child.userData.type !== 'light') {
+            child.visible = false;
+        }
+    });
+
+    // Create garden ground
+    const grassGeometry = new THREE.PlaneGeometry(15, 15);
+    const grassMaterial = new THREE.MeshStandardMaterial({
+        color: 0x7cfc00,
+        roughness: 0.9
+    });
+    const grass = new THREE.Mesh(grassGeometry, grassMaterial);
+    grass.rotation.x = -Math.PI / 2;
+    grass.position.y = 0;
+    grass.receiveShadow = true;
+    scene.add(grass);
+
+    // Add some flowers (small colored spheres)
+    const flowerColors = [0xff69b4, 0xffff00, 0xffffff, 0xff6347];
+    for (let i = 0; i < 20; i++) {
+        const flowerGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+        const flowerMaterial = new THREE.MeshStandardMaterial({
+            color: flowerColors[Math.floor(Math.random() * flowerColors.length)],
+            emissive: flowerColors[Math.floor(Math.random() * flowerColors.length)],
+            emissiveIntensity: 0.3
+        });
+        const flower = new THREE.Mesh(flowerGeometry, flowerMaterial);
+        flower.position.set(
+            (Math.random() - 0.5) * 12,
+            0.1,
+            (Math.random() - 0.5) * 12
         );
-    }, 2000);
+        scene.add(flower);
+    }
+
+    // Create white rabbits
+    for (let i = 0; i < 5; i++) {
+        const rabbit = createRabbit();
+        rabbit.position.set(
+            (Math.random() - 0.5) * 10,
+            0.3,
+            (Math.random() - 0.5) * 10
+        );
+        scene.add(rabbit);
+    }
+
+    // Create glowing picnic mat
+    const matGeometry = new THREE.PlaneGeometry(2, 2);
+    const matMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffd700,
+        emissive: 0xffd700,
+        emissiveIntensity: 0.5,
+        roughness: 0.7
+    });
+    const picnicMat = new THREE.Mesh(matGeometry, matMaterial);
+    picnicMat.rotation.x = -Math.PI / 2;
+    picnicMat.position.set(0, 0.01, -3);
+    picnicMat.userData = {
+        type: 'picnicMat',
+        interactable: true,
+        name: 'Glowing Picnic Mat'
+    };
+    scene.add(picnicMat);
+    interactables.push(picnicMat);
+
+    // Update sky
+    scene.background = new THREE.Color(0x87ceeb);
+    scene.fog = new THREE.Fog(0x87ceeb, 20, 50);
+
+    // Move camera to garden entrance
+    camera.position.set(0, 1.6, 5);
+}
+
+function createRabbit() {
+    const rabbitGroup = new THREE.Group();
+
+    // Body
+    const bodyGeometry = new THREE.SphereGeometry(0.25, 16, 16);
+    const rabbitMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.8
+    });
+    const body = new THREE.Mesh(bodyGeometry, rabbitMaterial);
+    body.scale.set(1, 0.8, 1.2);
+    rabbitGroup.add(body);
+
+    // Head
+    const headGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+    const head = new THREE.Mesh(headGeometry, rabbitMaterial);
+    head.position.set(0, 0.2, 0.25);
+    rabbitGroup.add(head);
+
+    // Ears
+    const earGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+    const leftEar = new THREE.Mesh(earGeometry, rabbitMaterial);
+    leftEar.scale.set(0.5, 1.5, 0.5);
+    leftEar.position.set(-0.08, 0.35, 0.25);
+    rabbitGroup.add(leftEar);
+
+    const rightEar = new THREE.Mesh(earGeometry, rabbitMaterial);
+    rightEar.scale.set(0.5, 1.5, 0.5);
+    rightEar.position.set(0.08, 0.35, 0.25);
+    rabbitGroup.add(rightEar);
+
+    return rabbitGroup;
 }
 
 function showEnding(title, description) {
@@ -925,6 +1178,95 @@ document.getElementById('code-input').addEventListener('keypress', (e) => {
 });
 document.getElementById('restart-btn').addEventListener('click', restartGame);
 
+// ===== AMBIENT AUDIO =====
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let audioInitialized = false;
+
+function initAudio() {
+    if (audioInitialized) return;
+    audioInitialized = true;
+
+    // Bird sounds (using oscillators to create bird-like chirps)
+    function createBirdSound() {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+
+        osc.frequency.value = 1500 + Math.random() * 1000;
+        gain.gain.value = 0.02;
+
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+        osc.stop(audioContext.currentTime + 0.5);
+    }
+
+    setInterval(() => {
+        if (Math.random() > 0.7) createBirdSound();
+    }, 3000);
+
+    // Reversed clock ticking (low frequency pulse)
+    const clockOsc = audioContext.createOscillator();
+    const clockGain = audioContext.createGain();
+    const clockFilter = audioContext.createBiquadFilter();
+
+    clockOsc.type = 'square';
+    clockOsc.frequency.value = 1; // 1 Hz pulse
+    clockFilter.type = 'lowpass';
+    clockFilter.frequency.value = 200;
+
+    clockOsc.connect(clockFilter);
+    clockFilter.connect(clockGain);
+    clockGain.connect(audioContext.destination);
+
+    clockGain.gain.value = 0.01;
+    clockOsc.start();
+
+    // Soft wind (pink noise)
+    const windBufferSize = audioContext.sampleRate * 2;
+    const windBuffer = audioContext.createBuffer(1, windBufferSize, audioContext.sampleRate);
+    const windData = windBuffer.getChannelData(0);
+
+    // Generate pink noise
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    for (let i = 0; i < windBufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520;
+        b3 = 0.86650 * b3 + white * 0.3104856;
+        b4 = 0.55000 * b4 + white * 0.5329522;
+        b5 = -0.7616 * b5 - white * 0.0168980;
+        windData[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+        b6 = white * 0.115926;
+    }
+
+    const windSource = audioContext.createBufferSource();
+    const windGain = audioContext.createGain();
+    const windFilter = audioContext.createBiquadFilter();
+
+    windSource.buffer = windBuffer;
+    windSource.loop = true;
+    windFilter.type = 'lowpass';
+    windFilter.frequency.value = 800;
+
+    windSource.connect(windFilter);
+    windFilter.connect(windGain);
+    windGain.connect(audioContext.destination);
+
+    windGain.gain.value = 0.03;
+    windSource.start();
+}
+
+// Initialize audio on first user interaction
+document.addEventListener('click', () => {
+    if (audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+    initAudio();
+}, { once: true });
+
 // ===== ANIMATION LOOP =====
 let lastTime = 0;
 
@@ -940,6 +1282,9 @@ function animate(currentTime) {
 
     // Animate glows
     glowAnimations.forEach(anim => anim());
+
+    // Animate dust
+    if (dustAnimation) dustAnimation();
 
     renderer.render(scene, camera);
 }
