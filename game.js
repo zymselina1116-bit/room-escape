@@ -16,9 +16,8 @@ const gameState = {
     mouseDown: false,
     mouseDelta: { x: 0, y: 0 },
     currentInteractable: null,
-    carpetLifted: false,
-    inBasement: false,
-    ended: false
+    ended: false,
+    floatOffset: 0  // For floating camera effect
 };
 
 // ===== SCENE SETUP =====
@@ -48,6 +47,136 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 // Raycaster for interactions
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
+
+// ===== AUDIO SYSTEM =====
+const audioSystem = {
+    listener: null,
+    sounds: {},
+    initialized: false
+};
+
+function initAudio() {
+    try {
+        // Create audio listener attached to camera
+        audioSystem.listener = new THREE.AudioListener();
+        camera.add(audioSystem.listener);
+
+        // Create audio loader
+        const audioLoader = new THREE.AudioLoader();
+
+        // Clock ticking sound
+        audioSystem.sounds.clock = new THREE.Audio(audioSystem.listener);
+
+        // Ambient wind/breeze
+        audioSystem.sounds.breeze = new THREE.Audio(audioSystem.listener);
+
+        // Birds chirping
+        audioSystem.sounds.birds = new THREE.Audio(audioSystem.listener);
+
+        // Since we don't have audio files, we'll create simple oscillator-based sounds
+        // Create AudioContext for procedural sounds
+        const audioContext = audioSystem.listener.context;
+
+        // Clock tick sound (short percussive click)
+        createClockTick(audioContext);
+
+        // Breeze sound (low frequency filtered noise)
+        createBreezeSound(audioContext);
+
+        // Bird chirps (high frequency oscillations)
+        createBirdChirps(audioContext);
+
+        audioSystem.initialized = true;
+        console.log('Audio system initialized');
+    } catch (error) {
+        console.warn('Audio initialization failed:', error);
+    }
+}
+
+function createClockTick(audioContext) {
+    // Create a repeating clock tick using gain nodes
+    const tickInterval = 1000; // 1 second intervals
+
+    function playTick() {
+        if (gameState.ended) return;
+
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.frequency.value = 800;
+        gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.05);
+
+        setTimeout(playTick, tickInterval);
+    }
+
+    // Start after a short delay
+    setTimeout(playTick, 1000);
+}
+
+function createBreezeSound(audioContext) {
+    // Create a gentle breeze using filtered noise
+    const bufferSize = audioContext.sampleRate * 2;
+    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = audioContext.createBufferSource();
+    noise.buffer = buffer;
+    noise.loop = true;
+
+    const filter = audioContext.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 400;
+
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = 0.03;
+
+    noise.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    noise.start();
+}
+
+function createBirdChirps(audioContext) {
+    function playChirp() {
+        if (gameState.ended) return;
+
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        // Random chirp frequency
+        const baseFreq = 1500 + Math.random() * 1000;
+        oscillator.frequency.setValueAtTime(baseFreq, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, audioContext.currentTime + 0.1);
+
+        gainNode.gain.setValueAtTime(0.02, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.15);
+
+        // Random interval between chirps (3-8 seconds)
+        const nextChirp = 3000 + Math.random() * 5000;
+        setTimeout(playChirp, nextChirp);
+    }
+
+    // Start birds after initial delay
+    setTimeout(playChirp, 2000);
+}
 
 // ===== LIGHTING =====
 function setupLighting() {
@@ -508,6 +637,17 @@ function initScene() {
     createPainting();
     document.getElementById('debug').textContent = 'Scene ready! Controls: WASD/Arrows + Mouse';
 
+    // Initialize audio on first user interaction (required by browsers)
+    const startAudio = () => {
+        if (!audioSystem.initialized) {
+            initAudio();
+            document.removeEventListener('click', startAudio);
+            document.removeEventListener('keydown', startAudio);
+        }
+    };
+    document.addEventListener('click', startAudio);
+    document.addEventListener('keydown', startAudio);
+
     // Hide debug after 3 seconds
     setTimeout(() => {
         const debugEl = document.getElementById('debug');
@@ -558,6 +698,11 @@ function updatePlayerMovement(delta) {
         camera.position.x = Math.max(-4.5, Math.min(4.5, camera.position.x));
         camera.position.z = Math.max(-4.5, Math.min(4.5, camera.position.z));
     }
+
+    // Gentle floating camera motion (dreamlike effect)
+    gameState.floatOffset += delta * 0.8;
+    const floatY = Math.sin(gameState.floatOffset) * 0.02; // Subtle vertical bobbing
+    camera.position.y = 1.6 + floatY;
 }
 
 function updateCameraRotation() {
@@ -620,62 +765,48 @@ function handleInteraction() {
         case 'desk':
             showNarrative(
                 'The Writing Desk',
-                'A handwritten note rests on the polished wood. The elegant script reads:\n\n"Every door leads somewhere, but not all roads leave the room."\n\nA simple sketch shows: Door A, Door B, the Window, and the Carpet.',
+                'A beautiful wooden desk with smooth, polished surfaces. On it rests a single handwritten note on cream-colored paper.\n\nThe elegant script reads:\n\n"Every door leads somewhere, but not all roads leave the room.\n\nSeek the light, follow the water, or discover what hides in plain sight.\n\nThe choice is yours, dreamer."\n\nA simple sketch at the bottom shows: Door A, Door B, the Window, and what appears to be a painting.',
                 []
             );
             break;
 
         case 'carpet':
-            if (!gameState.carpetLifted) {
-                showNarrative(
-                    'The Patterned Carpet',
-                    'You notice the carpet seems to rest unevenly on the floor. There might be something underneath...',
-                    [
-                        { text: 'Lift the carpet', action: () => liftCarpet() },
-                        { text: 'Leave it', action: () => hideNarrative() }
-                    ]
-                );
-            } else {
-                showNarrative(
-                    'The Hidden Trapdoor',
-                    'The trapdoor remains open, revealing darkness below. Do you dare descend?',
-                    [
-                        { text: 'Enter the basement', action: () => enterBasement() },
-                        { text: 'Step back', action: () => hideNarrative() }
-                    ]
-                );
-            }
+            showNarrative(
+                'The Patterned Carpet',
+                'An elegant patterned carpet with golden and brown hues. Its intricate design depicts swirling vines and ancient symbols.\n\nSoft and warm beneath your feet, it adds comfort to the wooden floor.',
+                []
+            );
             break;
 
         case 'window':
             showNarrative(
                 'The Sunlit Window',
-                'Warm sunlight streams through the glass. Beyond lies a breathtaking view — endless sky, drifting clouds, and a deep valley far below.\n\nA gentle breeze seems to call you. To step outside... or remain?',
+                'Warm golden sunlight streams through the glass panes, illuminating dancing dust motes in the air.\n\nBeyond the window lies a breathtaking view: endless blue sky, white clouds drifting lazily above a wide valley far below. The world outside seems to shimmer with an ethereal glow.\n\nA gentle breeze whispers through the glass. You feel drawn to step forward... into the light.',
                 [
                     { text: 'Step through the window', action: () => endingFallOfLight() },
-                    { text: 'Stay inside', action: () => hideNarrative() }
+                    { text: 'Turn back to the room', action: () => hideNarrative() }
                 ]
             );
             break;
 
         case 'doorA':
             showNarrative(
-                'Door A - The Left Door',
-                'The door is warm to the touch. Beyond it, you sense something vast — a space unlike any room.',
+                'Door A - The Corridor of Light',
+                'The heavy wooden door is warm to the touch, almost humming with energy.\n\nWhen you press your ear against it, you hear nothing — yet sense something vast beyond. A corridor of infinite light, perhaps? A space where gravity itself might fade away.\n\nThe brass handle gleams, waiting.',
                 [
-                    { text: 'Open the door', action: () => endingDispersedMemory() },
-                    { text: 'Turn back', action: () => hideNarrative() }
+                    { text: 'Open the door and enter', action: () => endingDispersedMemory() },
+                    { text: 'Step away', action: () => hideNarrative() }
                 ]
             );
             break;
 
         case 'doorB':
             showNarrative(
-                'Door B - The Right Door',
-                'Cool moisture emanates from this door. You hear the faint sound of flowing water.',
+                'Door B - The Water\'s Edge',
+                'This door feels cool and slightly damp to the touch. You catch the faint scent of fresh water and hear the gentle sound of flowing streams.\n\nSomewhere beyond lies water — peaceful, inviting, and mysterious. You imagine a tranquil pool shimmering with sunlight, a whirlpool spinning slowly at its center...\n\nDo you dare to see what awaits?',
                 [
                     { text: 'Open the door', action: () => endingWaterOfRebirth() },
-                    { text: 'Turn back', action: () => hideNarrative() }
+                    { text: 'Leave it closed', action: () => hideNarrative() }
                 ]
             );
             break;
@@ -683,10 +814,10 @@ function handleInteraction() {
         case 'painting':
             showNarrative(
                 'The Mysterious Painting',
-                'A serene landscape of rolling hills under a pastel sky. As you look closer, you notice the frame seems slightly loose on one side...',
+                'An exquisite landscape painting: rolling green hills beneath a pastel sky of soft pinks and blues. The brushstrokes are delicate, dreamlike.\n\nSomething about it draws you in. As you examine the ornate wooden frame, you notice it sits slightly loose against the wall, as if concealing something behind...\n\nCuriosity stirs within you.',
                 [
                     { text: 'Look behind the painting', action: () => revealKeypad() },
-                    { text: 'Admire and leave', action: () => hideNarrative() }
+                    { text: 'Simply admire it', action: () => hideNarrative() }
                 ]
             );
             break;
@@ -694,7 +825,7 @@ function handleInteraction() {
         case 'bookshelf':
             showNarrative(
                 'The Bookshelf',
-                'Rows of colorful books line the wooden shelves. A golden photo frame catches your eye — it displays the numbers "7853" in elegant script.',
+                'Rows of leather-bound books line the dark wooden shelves — volumes of poetry, philosophy, and forgotten tales. Their spines show rich colors: deep crimson, navy blue, forest green.\n\nAmong them, a golden photo frame stands out prominently. Inside the frame, elegant calligraphy displays four numbers:\n\n"7853"\n\nA code? A date? A clue?',
                 []
             );
             break;
@@ -736,38 +867,6 @@ function hideNarrative() {
 }
 
 // ===== SPECIAL ACTIONS =====
-function liftCarpet() {
-    gameState.carpetLifted = true;
-    hideNarrative();
-
-    setTimeout(() => {
-        showNarrative(
-            'A Hidden Trapdoor',
-            'Beneath the carpet lies a small wooden trapdoor. The wood is old but sturdy. A faint light glows from the cracks.',
-            [
-                { text: 'Open and descend', action: () => enterBasement() },
-                { text: 'Cover it back up', action: () => hideNarrative() }
-            ]
-        );
-    }, 500);
-}
-
-function enterBasement() {
-    hideNarrative();
-    gameState.inBasement = true;
-
-    // Fade transition
-    const overlay = document.getElementById('ending-overlay');
-    overlay.classList.add('active', 'fade');
-
-    setTimeout(() => {
-        showEnding(
-            'Ending A: Room of Echoes',
-            'You descend into the basement. The light turns muted but not dark.\n\nA diary rests on a stone table. Its pages reveal a single phrase:\n\n"The exit is in the wall."\n\nYou walk forward, searching. But no matter how far you go, the same layout repeats endlessly.\n\nThe room echoes with your footsteps... forever.'
-        );
-    }, 2000);
-}
-
 function revealKeypad() {
     hideNarrative();
     const codePanel = document.getElementById('code-input-panel');
@@ -786,7 +885,7 @@ function submitCode() {
     } else {
         showNarrative(
             'Incorrect Code',
-            'The keypad beeps softly. The code is incorrect. Perhaps there's a clue somewhere in the room?',
+            'The keypad beeps softly. The code is incorrect. Perhaps there\'s a clue somewhere in the room?',
             []
         );
         codePanel.classList.remove('show');
@@ -807,8 +906,8 @@ function endingFallOfLight() {
 
     setTimeout(() => {
         showEnding(
-            'Ending B: Fall of Light',
-            'You step forward through the window.\n\nThe world dissolves into brilliant white light. Sky and room blend together.\n\nGravity releases you. You float, weightless, into an endless expanse of clouds and sunlight.\n\nEverything fades... into pure radiance.'
+            'Fall of Light',
+            'You step forward through the window frame.\n\nThe moment your foot crosses the threshold, the world transforms.\n\nGlass dissolves. The room fades. Sky and stone blend into pure luminescence.\n\nGravity releases its hold. You float — weightless, peaceful — into an endless expanse of clouds and golden sunlight.\n\nThe valley below becomes distant, then vanishes entirely.\n\nYou are light. You are sky. You are everywhere and nowhere.\n\nEverything fades into pure, brilliant radiance.\n\nYou have escaped.'
         );
     }, 2000);
 }
@@ -822,8 +921,8 @@ function endingDispersedMemory() {
 
     setTimeout(() => {
         showEnding(
-            'Ending C: Dispersed Memory',
-            'Beyond Door A lies a hallway of glowing light.\n\nWith each step, the floor becomes more transparent. Gravity gently fades.\n\nYour footsteps leave no sound. The room behind you dims and blurs.\n\nSoon, even your own form feels distant — dissolving into particles of light.\n\nThe room becomes a fading memory, scattered into infinity.'
+            'Dispersed Memory',
+            'You open Door A and step into a corridor bathed in soft, radiant light.\n\nThe hallway stretches endlessly ahead, glowing with warmth. Each step you take feels lighter than the last.\n\nBeneath your feet, the floor becomes translucent — then transparent. You see stars below, galaxies swirling in the depths.\n\nGravity loosens its grip. Your footsteps make no sound.\n\nBehind you, the room grows distant, blurred, as if viewed through frosted glass. It shimmers... then fades entirely.\n\nYour own body feels lighter, less solid. You look at your hands and see light passing through them.\n\nYou are dissolving — not into nothing, but into everything.\n\nParticles of memory, scattered into infinity.\n\nPeaceful. Free. Dispersed.'
         );
     }, 2000);
 }
@@ -837,8 +936,8 @@ function endingWaterOfRebirth() {
 
     setTimeout(() => {
         showEnding(
-            'Ending D: Water of Rebirth',
-            'You step through Door B into sunlight and the sound of water.\n\nA tranquil pool stretches before you, glowing softly. At its center, water spins into a luminous whirl.\n\nDrawn by an invisible pull, you approach. The whirlpool reaches for you.\n\nThe world spins — light, water, warmth...\n\n...and you awaken again in the sunlit room, as if from a dream.'
+            'Water of Rebirth',
+            'You push open Door B and step into brilliant sunlight.\n\nBefore you lies a tranquil pool of crystal-clear water, shimmering like liquid glass. Gentle ripples dance across its surface, catching the light.\n\nAt the pool\'s center, water spirals slowly downward into a luminous whirlpool — glowing with soft blue and white light.\n\nYou feel drawn to it. An invisible pull, gentle but irresistible.\n\nYour feet carry you forward. The water is warm as you wade in. Peaceful. Safe.\n\nThe whirlpool grows closer. Its light intensifies.\n\nYou reach the center.\n\nThe world begins to spin — water, light, warmth, everything swirling together.\n\nYou close your eyes...\n\n...and when you open them again, you stand in the sunlit room.\n\nAs if awakening from a dream.\n\nThe cycle begins anew.'
         );
 
         // Special: restart after this ending
@@ -856,8 +955,8 @@ function endingGentleCage() {
 
     setTimeout(() => {
         showEnding(
-            'Ending E: Gentle Cage',
-            'The keypad beeps softly. A hidden panel slides open in the wall.\n\nBeyond it lies a secret garden — green grass, soft wind, and white rabbits hopping peacefully.\n\nWarm sunlight bathes everything in gold. A picnic mat waits beneath a willow tree.\n\nYou lie down, feeling the gentle breeze. Your eyes grow heavy.\n\nPerhaps this is the true escape... or the gentlest cage of all.'
+            'Gentle Cage',
+            'The keypad beeps softly — a pleasant, melodic tone.\n\nYou hear a mechanical click. A hidden panel in the wall slides open, revealing a secret passage.\n\nCurious, you step through.\n\nBeyond lies a hidden garden, bathed in perpetual golden afternoon light.\n\nLush green grass spreads beneath your feet. A gentle breeze carries the scent of wildflowers. In the distance, white rabbits hop peacefully between patches of clover.\n\nA graceful willow tree sways at the garden\'s heart. Beneath its branches lies a soft picnic mat, as if waiting just for you.\n\nYou walk over and lie down. The grass cushions you. The breeze whispers through the willow leaves.\n\nWarm sunlight filters through the branches. Your eyes grow heavy. Peace settles over you like a soft blanket.\n\nPerhaps this is the true escape...\n\nOr perhaps the gentlest cage of all.\n\nYou close your eyes and drift away.'
         );
     }, 2000);
 }
