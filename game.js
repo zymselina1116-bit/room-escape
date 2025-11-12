@@ -748,11 +748,11 @@ function createPainting() {
 }
 
 // ===== INITIALIZE SCENE =====
-async function initScene() {
+function initScene() {
     document.getElementById('debug').textContent = 'Building scene...';
 
-    // Initialize audio system
-    await audioManager.init();
+    // Initialize audio system (non-blocking)
+    audioManager.init().catch(err => console.warn('Audio init failed:', err));
 
     setupLighting();
     createRoom();
