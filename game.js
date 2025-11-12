@@ -11,20 +11,23 @@ document.getElementById('debug').textContent = 'THREE.js loaded: ' + THREE.REVIS
 // ===== GAME STATE =====
 const gameState = {
     playerPosition: { x: 0, y: 1.6, z: 0 },
+    targetPosition: { x: 0, y: 1.6, z: 0 }, // For delayed movement
     cameraRotation: { x: 0, y: 0 },
+    targetRotation: { x: 0, y: 0 }, // For delayed rotation
     keys: {},
     mouseDown: false,
     mouseDelta: { x: 0, y: 0 },
     currentInteractable: null,
     ended: false,
-    floatOffset: 0  // For floating camera effect
+    floatOffset: 0,  // For floating camera effect
+    breatheOffset: 0  // For breathing walls effect
 };
 
 // ===== SCENE SETUP =====
 const canvas = document.getElementById('canvas');
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf5e6d3);
-scene.fog = new THREE.Fog(0xf5e6d3, 20, 50);
+scene.background = new THREE.Color(0xfff9f0); // Pale, oversaturated cream-white
+scene.fog = new THREE.Fog(0xfff9f0, 15, 40); // Denser, closer fog for dreamlike atmosphere
 
 // Camera
 const camera = new THREE.PerspectiveCamera(
@@ -94,8 +97,10 @@ function initAudio() {
 }
 
 function createClockTick(audioContext) {
-    // Create a repeating clock tick using gain nodes
-    const tickInterval = 1000; // 1 second intervals
+    // Create an IRREGULAR clock tick - dreamcore aesthetic
+    let tickIntervals = [800, 1200, 900, 1100, 1300, 850, 1050]; // Irregular patterns
+    let tickIndex = 0;
+    let isReversed = false;
 
     function playTick() {
         if (gameState.ended) return;
@@ -106,26 +111,53 @@ function createClockTick(audioContext) {
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
 
-        oscillator.frequency.value = 800;
-        gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+        // Slightly different pitch each time for unsettling effect
+        oscillator.frequency.value = 750 + Math.random() * 100;
+        gainNode.gain.setValueAtTime(0.06, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08);
 
         oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.05);
+        oscillator.stop(audioContext.currentTime + 0.08);
 
-        setTimeout(playTick, tickInterval);
+        // Irregular interval
+        tickIndex = (tickIndex + 1) % tickIntervals.length;
+        const nextInterval = tickIntervals[tickIndex];
+
+        // Occasionally reverse the ticking sound direction
+        if (Math.random() < 0.15) {
+            isReversed = !isReversed;
+            // Play a reversed-sounding tick (higher to lower pitch)
+            setTimeout(() => {
+                if (gameState.ended) return;
+                const revOsc = audioContext.createOscillator();
+                const revGain = audioContext.createGain();
+                revOsc.connect(revGain);
+                revGain.connect(audioContext.destination);
+
+                revOsc.frequency.setValueAtTime(850, audioContext.currentTime);
+                revOsc.frequency.exponentialRampToValueAtTime(700, audioContext.currentTime + 0.1);
+                revGain.gain.setValueAtTime(0.04, audioContext.currentTime);
+                revGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+
+                revOsc.start(audioContext.currentTime);
+                revOsc.stop(audioContext.currentTime + 0.1);
+            }, 150);
+        }
+
+        setTimeout(playTick, nextInterval);
     }
 
     // Start after a short delay
-    setTimeout(playTick, 1000);
+    setTimeout(playTick, 1500);
 }
 
 function createBreezeSound(audioContext) {
-    // Create a gentle breeze using filtered noise
-    const bufferSize = audioContext.sampleRate * 2;
+    // Create a LOW FREQUENCY HUM/DRONE - dreamcore ambient
+    const bufferSize = audioContext.sampleRate * 4;
     const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
     const data = buffer.getChannelData(0);
 
+    // Generate low-frequency drone noise
     for (let i = 0; i < bufferSize; i++) {
         data[i] = Math.random() * 2 - 1;
     }
@@ -134,58 +166,105 @@ function createBreezeSound(audioContext) {
     noise.buffer = buffer;
     noise.loop = true;
 
+    // Very low pass filter for deep drone
     const filter = audioContext.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 400;
+    filter.frequency.value = 150;
+    filter.Q.value = 2;
 
-    const gainNode = audioContext.createGain();
-    gainNode.gain.value = 0.03;
+    // Add reverb/echo effect with delay
+    const delay = audioContext.createDelay();
+    delay.delayTime.value = 0.3;
+
+    const feedbackGain = audioContext.createGain();
+    feedbackGain.gain.value = 0.2;
+
+    const mainGain = audioContext.createGain();
+    mainGain.gain.value = 0.04;
 
     noise.connect(filter);
-    filter.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    filter.connect(delay);
+    delay.connect(feedbackGain);
+    feedbackGain.connect(delay); // Feedback loop for echo
+    delay.connect(mainGain);
+    filter.connect(mainGain);
+    mainGain.connect(audioContext.destination);
 
     noise.start();
+
+    // Add slowly oscillating bass drone
+    const bassOsc = audioContext.createOscillator();
+    bassOsc.type = 'sine';
+    bassOsc.frequency.value = 55; // Very low frequency
+    const bassGain = audioContext.createGain();
+    bassGain.gain.value = 0.02;
+
+    // Slowly modulate the bass frequency for unease
+    const lfo = audioContext.createOscillator();
+    lfo.frequency.value = 0.1;
+    const lfoGain = audioContext.createGain();
+    lfoGain.gain.value = 5;
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(bassOsc.frequency);
+
+    bassOsc.connect(bassGain);
+    bassGain.connect(audioContext.destination);
+
+    bassOsc.start();
+    lfo.start();
 }
 
 function createBirdChirps(audioContext) {
+    // Create DISTANT ECHOING SOUNDS - dreamcore ambient
     function playChirp() {
         if (gameState.ended) return;
 
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
 
+        // Add delay for echo effect
+        const delay = audioContext.createDelay();
+        delay.delayTime.value = 0.5; // Half-second delay for dreamlike echo
+
+        const delayFeedback = audioContext.createGain();
+        delayFeedback.gain.value = 0.4;
+
         oscillator.connect(gainNode);
+        gainNode.connect(delay);
+        delay.connect(delayFeedback);
+        delayFeedback.connect(delay); // Feedback
+        delay.connect(audioContext.destination);
         gainNode.connect(audioContext.destination);
 
-        // Random chirp frequency
-        const baseFreq = 1500 + Math.random() * 1000;
+        // More distant, ethereal frequency
+        const baseFreq = 1800 + Math.random() * 800;
         oscillator.frequency.setValueAtTime(baseFreq, audioContext.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, audioContext.currentTime + 0.1);
+        oscillator.frequency.exponentialRampToValueAtTime(baseFreq * 1.3, audioContext.currentTime + 0.2);
 
-        gainNode.gain.setValueAtTime(0.02, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
+        gainNode.gain.setValueAtTime(0.015, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
 
         oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.15);
+        oscillator.stop(audioContext.currentTime + 0.3);
 
-        // Random interval between chirps (3-8 seconds)
-        const nextChirp = 3000 + Math.random() * 5000;
+        // Much longer intervals - more sparse and unsettling (5-12 seconds)
+        const nextChirp = 5000 + Math.random() * 7000;
         setTimeout(playChirp, nextChirp);
     }
 
-    // Start birds after initial delay
-    setTimeout(playChirp, 2000);
+    // Start distant sounds after longer delay
+    setTimeout(playChirp, 4000);
 }
 
 // ===== LIGHTING =====
 function setupLighting() {
-    // Ambient light for overall illumination
-    const ambientLight = new THREE.AmbientLight(0xfff8e7, 0.6);
+    // OVERSATURATED ambient light - dreamcore
+    const ambientLight = new THREE.AmbientLight(0xfffff0, 0.85);
     scene.add(ambientLight);
 
-    // Main sunlight from window
-    const sunLight = new THREE.DirectionalLight(0xfff4d6, 1.0);
+    // Main sourceless light - brighter, no clear origin
+    const sunLight = new THREE.DirectionalLight(0xfffef8, 1.4);
     sunLight.position.set(5, 8, 5);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
@@ -196,68 +275,92 @@ function setupLighting() {
     sunLight.shadow.camera.right = 10;
     sunLight.shadow.camera.top = 10;
     sunLight.shadow.camera.bottom = -10;
+    sunLight.shadow.bias = -0.0001;
     scene.add(sunLight);
 
-    // Warm fill light
-    const fillLight = new THREE.PointLight(0xffe4b5, 0.4, 20);
-    fillLight.position.set(-3, 3, 0);
-    scene.add(fillLight);
+    // Faint pink light leak - dreamcore aesthetic
+    const pinkLight = new THREE.PointLight(0xffd5e5, 0.35, 25);
+    pinkLight.position.set(-4, 2, 0);
+    scene.add(pinkLight);
 
-    // Additional warm light
-    const warmLight = new THREE.PointLight(0xffd7a3, 0.3, 15);
-    warmLight.position.set(3, 2, -3);
-    scene.add(warmLight);
+    // Pale blue accent - liminal quality
+    const blueAccent = new THREE.PointLight(0xe8f4ff, 0.25, 20);
+    blueAccent.position.set(4, 2, -2);
+    scene.add(blueAccent);
+
+    // Subtle golden glow from nowhere
+    const goldenGlow = new THREE.PointLight(0xfff5d0, 0.3, 18);
+    goldenGlow.position.set(0, 3, 4);
+    scene.add(goldenGlow);
 }
 
 // ===== MATERIALS =====
 const materials = {
     wall: new THREE.MeshStandardMaterial({
-        color: 0xf5e6d3,
-        roughness: 0.8,
-        metalness: 0.1
+        color: 0xfffef5, // Pale, almost white
+        roughness: 0.9,
+        metalness: 0.05,
+        transparent: true,
+        opacity: 0.98 // Slightly translucent
     }),
     floor: new THREE.MeshStandardMaterial({
-        color: 0xd4b896,
-        roughness: 0.7,
-        metalness: 0.2
+        color: 0xf0e8d8, // Faded wood tone
+        roughness: 0.75,
+        metalness: 0.15,
+        transparent: true,
+        opacity: 0.95
     }),
-    wood: new THREE.MeshStandardMaterial({
-        color: 0x8b6f47,
+    wood: new THREE.MeshPhysicalMaterial({
+        color: 0xc4a880, // Lighter, dreamlike wood
         roughness: 0.6,
-        metalness: 0.1
+        metalness: 0.08,
+        transparent: true,
+        opacity: 0.92, // Translucent wood - dreamcore
+        transmission: 0.05
     }),
-    darkWood: new THREE.MeshStandardMaterial({
-        color: 0x654321,
+    darkWood: new THREE.MeshPhysicalMaterial({
+        color: 0x9d8066, // Muted brown
         roughness: 0.5,
-        metalness: 0.1
+        metalness: 0.08,
+        transparent: true,
+        opacity: 0.90,
+        transmission: 0.08
     }),
     carpet: new THREE.MeshStandardMaterial({
-        color: 0xb8860b,
-        roughness: 0.9,
-        metalness: 0
+        color: 0xd4af7a, // Faded gold
+        roughness: 0.95,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.88
     }),
     window: new THREE.MeshPhysicalMaterial({
-        color: 0xffffff,
+        color: 0xfff9f9,
         transparent: true,
-        opacity: 0.3,
-        roughness: 0.1,
-        metalness: 0.1,
-        transmission: 0.9
+        opacity: 0.2,
+        roughness: 0.05,
+        metalness: 0.05,
+        transmission: 0.95,
+        ior: 1.5
     }),
-    door: new THREE.MeshStandardMaterial({
-        color: 0xa0826d,
-        roughness: 0.6,
-        metalness: 0.1
+    door: new THREE.MeshPhysicalMaterial({
+        color: 0xb89876, // Pale wood door
+        roughness: 0.65,
+        metalness: 0.05,
+        transparent: true,
+        opacity: 0.93,
+        transmission: 0.03
     }),
     glow: new THREE.MeshBasicMaterial({
-        color: 0xffd700,
+        color: 0xffeac5, // Soft golden glow
         transparent: true,
-        opacity: 0.3
+        opacity: 0.25,
+        blending: THREE.AdditiveBlending
     })
 };
 
 // ===== INTERACTIVE OBJECTS =====
 const interactables = [];
+const breathingWalls = []; // Store wall references for breathing animation
 
 function createGlowEffect(object) {
     const glowGeometry = object.geometry.clone();
@@ -311,28 +414,36 @@ function createRoom() {
     const backWall = new THREE.Mesh(wallGeometry, materials.wall);
     backWall.position.set(0, 2, -5);
     backWall.receiveShadow = true;
+    backWall.userData.initialZ = -5; // Store initial position
     roomGroup.add(backWall);
+    breathingWalls.push(backWall);
 
     // Front wall
     const frontWall = new THREE.Mesh(wallGeometry, materials.wall);
     frontWall.position.set(0, 2, 5);
     frontWall.rotation.y = Math.PI;
     frontWall.receiveShadow = true;
+    frontWall.userData.initialZ = 5;
     roomGroup.add(frontWall);
+    breathingWalls.push(frontWall);
 
     // Left wall
     const leftWall = new THREE.Mesh(wallGeometry, materials.wall);
     leftWall.position.set(-5, 2, 0);
     leftWall.rotation.y = Math.PI / 2;
     leftWall.receiveShadow = true;
+    leftWall.userData.initialX = -5;
     roomGroup.add(leftWall);
+    breathingWalls.push(leftWall);
 
     // Right wall
     const rightWall = new THREE.Mesh(wallGeometry, materials.wall);
     rightWall.position.set(5, 2, 0);
     rightWall.rotation.y = -Math.PI / 2;
     rightWall.receiveShadow = true;
+    rightWall.userData.initialX = 5;
     roomGroup.add(rightWall);
+    breathingWalls.push(rightWall);
 
     scene.add(roomGroup);
     return roomGroup;
@@ -662,7 +773,7 @@ function initScene() {
 function updatePlayerMovement(delta) {
     if (gameState.ended) return;
 
-    const moveSpeed = 2.5 * delta;
+    const moveSpeed = 1.8 * delta; // Slower for underwater feel
     const forward = new THREE.Vector3();
     const right = new THREE.Vector3();
 
@@ -692,39 +803,54 @@ function updatePlayerMovement(delta) {
 
     if (movement.length() > 0) {
         movement.normalize().multiplyScalar(moveSpeed);
-        camera.position.add(movement);
 
-        // Keep player within room bounds
-        camera.position.x = Math.max(-4.5, Math.min(4.5, camera.position.x));
-        camera.position.z = Math.max(-4.5, Math.min(4.5, camera.position.z));
+        // Update target position
+        gameState.targetPosition.x += movement.x;
+        gameState.targetPosition.z += movement.z;
+
+        // Keep target within room bounds
+        gameState.targetPosition.x = Math.max(-4.5, Math.min(4.5, gameState.targetPosition.x));
+        gameState.targetPosition.z = Math.max(-4.5, Math.min(4.5, gameState.targetPosition.z));
     }
 
-    // Gentle floating camera motion (dreamlike effect)
-    gameState.floatOffset += delta * 0.8;
-    const floatY = Math.sin(gameState.floatOffset) * 0.02; // Subtle vertical bobbing
-    camera.position.y = 1.6 + floatY;
+    // DELAYED MOVEMENT - smooth lerp for underwater/dreamlike feel
+    const smoothFactor = 0.08; // Lower = more delay/smoothness
+    camera.position.x += (gameState.targetPosition.x - camera.position.x) * smoothFactor;
+    camera.position.z += (gameState.targetPosition.z - camera.position.z) * smoothFactor;
+
+    // Floating camera motion with slightly irregular pattern (dreamcore)
+    gameState.floatOffset += delta * 0.6;
+    const floatY = Math.sin(gameState.floatOffset) * 0.025 + Math.sin(gameState.floatOffset * 0.7) * 0.015;
+    const targetY = 1.6 + floatY;
+    camera.position.y += (targetY - camera.position.y) * 0.05; // Smooth vertical float
 }
 
 function updateCameraRotation() {
     if (gameState.ended) return;
 
     if (gameState.mouseDown && (Math.abs(gameState.mouseDelta.x) > 0 || Math.abs(gameState.mouseDelta.y) > 0)) {
-        const sensitivity = 0.002;
+        const sensitivity = 0.0015; // Slightly slower
 
-        gameState.cameraRotation.y -= gameState.mouseDelta.x * sensitivity;
-        gameState.cameraRotation.x -= gameState.mouseDelta.y * sensitivity;
+        // Update target rotation
+        gameState.targetRotation.y -= gameState.mouseDelta.x * sensitivity;
+        gameState.targetRotation.x -= gameState.mouseDelta.y * sensitivity;
 
         // Limit vertical rotation
-        gameState.cameraRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gameState.cameraRotation.x));
-
-        // Apply rotation
-        camera.rotation.set(0, 0, 0);
-        camera.rotateY(gameState.cameraRotation.y);
-        camera.rotateX(gameState.cameraRotation.x);
+        gameState.targetRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gameState.targetRotation.x));
 
         gameState.mouseDelta.x = 0;
         gameState.mouseDelta.y = 0;
     }
+
+    // DELAYED CAMERA ROTATION - smooth lerp for dreamlike feel
+    const rotSmooth = 0.12; // Smooth rotation delay
+    gameState.cameraRotation.x += (gameState.targetRotation.x - gameState.cameraRotation.x) * rotSmooth;
+    gameState.cameraRotation.y += (gameState.targetRotation.y - gameState.cameraRotation.y) * rotSmooth;
+
+    // Apply smoothed rotation
+    camera.rotation.set(0, 0, 0);
+    camera.rotateY(gameState.cameraRotation.y);
+    camera.rotateX(gameState.cameraRotation.x);
 }
 
 // ===== INTERACTION SYSTEM =====
@@ -764,68 +890,68 @@ function handleInteraction() {
     switch(type) {
         case 'desk':
             showNarrative(
-                'The Writing Desk',
-                'A beautiful wooden desk with smooth, polished surfaces. On it rests a single handwritten note on cream-colored paper.\n\nThe elegant script reads:\n\n"Every door leads somewhere, but not all roads leave the room.\n\nSeek the light, follow the water, or discover what hides in plain sight.\n\nThe choice is yours, dreamer."\n\nA simple sketch at the bottom shows: Door A, Door B, the Window, and what appears to be a painting.',
+                '',
+                'A note.\nThe ink is still wet.\n\n"every door leads somewhere\nbut not all roads leave"\n\nThe handwriting looks like yours.\nYou don\'t remember writing it.',
                 []
             );
             break;
 
         case 'carpet':
             showNarrative(
-                'The Patterned Carpet',
-                'An elegant patterned carpet with golden and brown hues. Its intricate design depicts swirling vines and ancient symbols.\n\nSoft and warm beneath your feet, it adds comfort to the wooden floor.',
+                '',
+                'The pattern shifts when you look away.\n\nPulses. Remembers.\n\nYou can feel something underneath, but it isn\'t moving.',
                 []
             );
             break;
 
         case 'window':
             showNarrative(
-                'The Sunlit Window',
-                'Warm golden sunlight streams through the glass panes, illuminating dancing dust motes in the air.\n\nBeyond the window lies a breathtaking view: endless blue sky, white clouds drifting lazily above a wide valley far below. The world outside seems to shimmer with an ethereal glow.\n\nA gentle breeze whispers through the glass. You feel drawn to step forward... into the light.',
+                '',
+                'The glass is open but still there.\n\nClouds hang motionless.\nThe valley has no bottom.\n\nYour reflection moves half a second before you do.',
                 [
-                    { text: 'Step through the window', action: () => endingFallOfLight() },
-                    { text: 'Turn back to the room', action: () => hideNarrative() }
+                    { text: 'step through', action: () => endingFallOfLight() },
+                    { text: 'step back', action: () => hideNarrative() }
                 ]
             );
             break;
 
         case 'doorA':
             showNarrative(
-                'Door A - The Corridor of Light',
-                'The heavy wooden door is warm to the touch, almost humming with energy.\n\nWhen you press your ear against it, you hear nothing — yet sense something vast beyond. A corridor of infinite light, perhaps? A space where gravity itself might fade away.\n\nThe brass handle gleams, waiting.',
+                '',
+                'Warm to touch. Humming.\n\nYou hear footsteps on the other side.\nThey match yours.\nAlmost.',
                 [
-                    { text: 'Open the door and enter', action: () => endingDispersedMemory() },
-                    { text: 'Step away', action: () => hideNarrative() }
+                    { text: 'open', action: () => endingDispersedMemory() },
+                    { text: 'wait', action: () => hideNarrative() }
                 ]
             );
             break;
 
         case 'doorB':
             showNarrative(
-                'Door B - The Water\'s Edge',
-                'This door feels cool and slightly damp to the touch. You catch the faint scent of fresh water and hear the gentle sound of flowing streams.\n\nSomewhere beyond lies water — peaceful, inviting, and mysterious. You imagine a tranquil pool shimmering with sunlight, a whirlpool spinning slowly at its center...\n\nDo you dare to see what awaits?',
+                '',
+                'Cool. Damp.\n\nWater sounds.\nSomething spinning.\n\nThe clock behind you is ticking backwards now.',
                 [
-                    { text: 'Open the door', action: () => endingWaterOfRebirth() },
-                    { text: 'Leave it closed', action: () => hideNarrative() }
+                    { text: 'open', action: () => endingWaterOfRebirth() },
+                    { text: 'wait', action: () => hideNarrative() }
                 ]
             );
             break;
 
         case 'painting':
             showNarrative(
-                'The Mysterious Painting',
-                'An exquisite landscape painting: rolling green hills beneath a pastel sky of soft pinks and blues. The brushstrokes are delicate, dreamlike.\n\nSomething about it draws you in. As you examine the ornate wooden frame, you notice it sits slightly loose against the wall, as if concealing something behind...\n\nCuriosity stirs within you.',
+                '',
+                'Hills. Sky. Soft colors.\n\nThe frame tilts slightly.\nYou didn\'t touch it.\n\nSomething glows behind.',
                 [
-                    { text: 'Look behind the painting', action: () => revealKeypad() },
-                    { text: 'Simply admire it', action: () => hideNarrative() }
+                    { text: 'look behind', action: () => revealKeypad() },
+                    { text: 'look away', action: () => hideNarrative() }
                 ]
             );
             break;
 
         case 'bookshelf':
             showNarrative(
-                'The Bookshelf',
-                'Rows of leather-bound books line the dark wooden shelves — volumes of poetry, philosophy, and forgotten tales. Their spines show rich colors: deep crimson, navy blue, forest green.\n\nAmong them, a golden photo frame stands out prominently. Inside the frame, elegant calligraphy displays four numbers:\n\n"7853"\n\nA code? A date? A clue?',
+                '',
+                'Books without titles.\nColors fading.\n\nA frame glows faintly.\nFour numbers written by no one.\n\n7853',
                 []
             );
             break;
@@ -884,8 +1010,8 @@ function submitCode() {
         endingGentleCage();
     } else {
         showNarrative(
-            'Incorrect Code',
-            'The keypad beeps softly. The code is incorrect. Perhaps there\'s a clue somewhere in the room?',
+            '',
+            'Wrong.\n\nThe keypad blinks.\nWaiting.\n\nThe numbers are written somewhere.\nYou\'ve already seen them.',
             []
         );
         codePanel.classList.remove('show');
@@ -906,8 +1032,8 @@ function endingFallOfLight() {
 
     setTimeout(() => {
         showEnding(
-            'Fall of Light',
-            'You step forward through the window frame.\n\nThe moment your foot crosses the threshold, the world transforms.\n\nGlass dissolves. The room fades. Sky and stone blend into pure luminescence.\n\nGravity releases its hold. You float — weightless, peaceful — into an endless expanse of clouds and golden sunlight.\n\nThe valley below becomes distant, then vanishes entirely.\n\nYou are light. You are sky. You are everywhere and nowhere.\n\nEverything fades into pure, brilliant radiance.\n\nYou have escaped.'
+            '',
+            'You step through.\n\nThe glass was never there.\n\n.\n\n.\n\n.\n\nGravity forgets you.\n\nThe room dissolves upward.\n\nClouds. Light. White.\n\n.\n\n.\n\nYou are falling\nor floating\nor both\nor neither\n\n.\n\nThe valley has no bottom.\nYou have no shape.\n\n.\n\nEverything is light now.'
         );
     }, 2000);
 }
@@ -921,8 +1047,8 @@ function endingDispersedMemory() {
 
     setTimeout(() => {
         showEnding(
-            'Dispersed Memory',
-            'You open Door A and step into a corridor bathed in soft, radiant light.\n\nThe hallway stretches endlessly ahead, glowing with warmth. Each step you take feels lighter than the last.\n\nBeneath your feet, the floor becomes translucent — then transparent. You see stars below, galaxies swirling in the depths.\n\nGravity loosens its grip. Your footsteps make no sound.\n\nBehind you, the room grows distant, blurred, as if viewed through frosted glass. It shimmers... then fades entirely.\n\nYour own body feels lighter, less solid. You look at your hands and see light passing through them.\n\nYou are dissolving — not into nothing, but into everything.\n\nParticles of memory, scattered into infinity.\n\nPeaceful. Free. Dispersed.'
+            '',
+            'The corridor hums.\n\n.\n\nYour footsteps echo\nhalf a second late.\n\n.\n\nThe floor becomes glass\nthen air\nthen stars.\n\n.\n\nYou look at your hands.\nLight passes through.\n\n.\n\nThe room behind you\nblurs\nshimmers\nforgets.\n\n.\n\nYou are\nparticles\nmemory\nlight\nscattered\n\n.\n\n.\n\nYou were never solid.'
         );
     }, 2000);
 }
@@ -936,8 +1062,8 @@ function endingWaterOfRebirth() {
 
     setTimeout(() => {
         showEnding(
-            'Water of Rebirth',
-            'You push open Door B and step into brilliant sunlight.\n\nBefore you lies a tranquil pool of crystal-clear water, shimmering like liquid glass. Gentle ripples dance across its surface, catching the light.\n\nAt the pool\'s center, water spirals slowly downward into a luminous whirlpool — glowing with soft blue and white light.\n\nYou feel drawn to it. An invisible pull, gentle but irresistible.\n\nYour feet carry you forward. The water is warm as you wade in. Peaceful. Safe.\n\nThe whirlpool grows closer. Its light intensifies.\n\nYou reach the center.\n\nThe world begins to spin — water, light, warmth, everything swirling together.\n\nYou close your eyes...\n\n...and when you open them again, you stand in the sunlit room.\n\nAs if awakening from a dream.\n\nThe cycle begins anew.'
+            '',
+            'Water.\n\n.\n\nA pool that doesn\'t reflect you.\n\nSomething spinning at the center.\nGlowing.\n\n.\n\nYou wade in.\nThe water is warm.\n\n.\n\nCloser.\nThe whirlpool pulls.\nGentle.\nIrresistible.\n\n.\n\nEverything spins—\nwater\nlight\ntime\n\n.\n\nYou close your eyes.\n\n.\n\n.\n\n.\n\nYou open them.\n\nYou are in the room again.\n\nThe clock is ticking.\n\nYou have always been here.'
         );
 
         // Special: restart after this ending
@@ -955,8 +1081,8 @@ function endingGentleCage() {
 
     setTimeout(() => {
         showEnding(
-            'Gentle Cage',
-            'The keypad beeps softly — a pleasant, melodic tone.\n\nYou hear a mechanical click. A hidden panel in the wall slides open, revealing a secret passage.\n\nCurious, you step through.\n\nBeyond lies a hidden garden, bathed in perpetual golden afternoon light.\n\nLush green grass spreads beneath your feet. A gentle breeze carries the scent of wildflowers. In the distance, white rabbits hop peacefully between patches of clover.\n\nA graceful willow tree sways at the garden\'s heart. Beneath its branches lies a soft picnic mat, as if waiting just for you.\n\nYou walk over and lie down. The grass cushions you. The breeze whispers through the willow leaves.\n\nWarm sunlight filters through the branches. Your eyes grow heavy. Peace settles over you like a soft blanket.\n\nPerhaps this is the true escape...\n\nOr perhaps the gentlest cage of all.\n\nYou close your eyes and drift away.'
+            '',
+            'The panel opens.\nYou didn\'t enter the code.\n\nIt knew.\n\n.\n\nA garden.\nSuspended above clouds.\n\nGrass that casts golden reflections.\n\n.\n\nWhite rabbits watch.\nUnblinking.\nPerfectly still.\n\n.\n\nA willow tree.\nA picnic mat.\nWaiting.\n\n.\n\nYou lie down.\nThe sun never sets here.\n\nWarm.\nSafe.\nGentle.\n\n.\n\n.\n\nYour eyes close.\n\n.\n\nThis is escape\nor\nthe softest cage\nor\nboth\nor\nneither\n\n.\n\nYou forget which.'
         );
     }, 2000);
 }
@@ -1039,6 +1165,22 @@ function animate(currentTime) {
 
     // Animate glows
     glowAnimations.forEach(anim => anim());
+
+    // BREATHING WALLS - dreamcore effect
+    gameState.breatheOffset += delta * 0.5;
+    breathingWalls.forEach((wall, index) => {
+        // Each wall breathes slightly out of phase
+        const phaseOffset = index * 0.5;
+        const breathe = Math.sin(gameState.breatheOffset + phaseOffset) * 0.015;
+
+        // Animate walls breathing in/out
+        if (wall.userData.initialX !== undefined) {
+            wall.position.x = wall.userData.initialX + (wall.userData.initialX > 0 ? breathe : -breathe);
+        }
+        if (wall.userData.initialZ !== undefined) {
+            wall.position.z = wall.userData.initialZ + (wall.userData.initialZ > 0 ? breathe : -breathe);
+        }
+    });
 
     renderer.render(scene, camera);
 }
