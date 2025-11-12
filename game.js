@@ -8,6 +8,259 @@ if (typeof THREE === 'undefined') {
 console.log('THREE.js loaded successfully:', THREE.REVISION);
 document.getElementById('debug').textContent = 'THREE.js loaded: ' + THREE.REVISION;
 
+// ===== AUDIO SYSTEM =====
+class AudioManager {
+    constructor() {
+        this.audioContext = null;
+        this.masterGain = null;
+        this.enabled = true;
+        this.sounds = {};
+        this.loops = {};
+    }
+
+    async init() {
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.masterGain = this.audioContext.createGain();
+            this.masterGain.gain.value = 0.3;
+            this.masterGain.connect(this.audioContext.destination);
+            console.log('Audio system initialized');
+        } catch (error) {
+            console.warn('Audio initialization failed:', error);
+        }
+    }
+
+    // Generate clock ticking sound
+    createClockTick() {
+        if (!this.audioContext) return;
+
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.08, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.05);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.masterGain);
+
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + 0.05);
+    }
+
+    // Generate ambient breeze sound (continuous)
+    createBreeze() {
+        if (!this.audioContext || this.loops.breeze) return;
+
+        const bufferSize = this.audioContext.sampleRate * 2;
+        const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        // Generate pink noise for natural wind sound
+        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+        for (let i = 0; i < bufferSize; i++) {
+            const white = Math.random() * 2 - 1;
+            b0 = 0.99886 * b0 + white * 0.0555179;
+            b1 = 0.99332 * b1 + white * 0.0750759;
+            b2 = 0.96900 * b2 + white * 0.1538520;
+            b3 = 0.86650 * b3 + white * 0.3104856;
+            b4 = 0.55000 * b4 + white * 0.5329522;
+            b5 = -0.7616 * b5 - white * 0.0168980;
+            data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.05;
+            b6 = white * 0.115926;
+        }
+
+        const source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const filter = this.audioContext.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 800;
+        filter.Q.value = 0.5;
+
+        const gainNode = this.audioContext.createGain();
+        gainNode.gain.value = 0.15;
+
+        source.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(this.masterGain);
+
+        source.start();
+        this.loops.breeze = { source, gainNode };
+    }
+
+    // Generate bird chirping sounds
+    createBirdChirp() {
+        if (!this.audioContext) return;
+
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        const startFreq = 1800 + Math.random() * 600;
+        const endFreq = startFreq + (Math.random() * 400 - 200);
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(startFreq, this.audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(endFreq, this.audioContext.currentTime + 0.1);
+
+        gainNode.gain.setValueAtTime(0.08, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.15);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.masterGain);
+
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + 0.15);
+    }
+
+    // Generate door opening sound
+    createDoorSound() {
+        if (!this.audioContext) return;
+
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(120, this.audioContext.currentTime);
+        oscillator.frequency.linearRampToValueAtTime(80, this.audioContext.currentTime + 0.3);
+
+        gainNode.gain.setValueAtTime(0.15, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.3);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.masterGain);
+
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + 0.3);
+    }
+
+    // Generate water sound
+    createWaterSound() {
+        if (!this.audioContext) return;
+
+        const bufferSize = this.audioContext.sampleRate * 0.5;
+        const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+
+        const source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+
+        const filter = this.audioContext.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1200;
+        filter.Q.value = 1.5;
+
+        const gainNode = this.audioContext.createGain();
+        gainNode.gain.setValueAtTime(0.2, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.5);
+
+        source.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(this.masterGain);
+
+        source.start();
+    }
+
+    // Generate gentle whoosh/transition sound
+    createTransitionSound() {
+        if (!this.audioContext) return;
+
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(400, this.audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + 1.5);
+
+        gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 1.5);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.masterGain);
+
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + 1.5);
+    }
+
+    // Start ambient background loops
+    startAmbience() {
+        if (!this.enabled || !this.audioContext) return;
+
+        // Start breeze
+        this.createBreeze();
+
+        // Clock ticking every 1 second
+        if (!this.loops.clockInterval) {
+            this.loops.clockInterval = setInterval(() => {
+                if (this.enabled) this.createClockTick();
+            }, 1000);
+        }
+
+        // Random bird chirps
+        if (!this.loops.birdInterval) {
+            const chirpBirds = () => {
+                if (this.enabled) this.createBirdChirp();
+                const nextChirp = 3000 + Math.random() * 7000; // Random interval 3-10 seconds
+                this.loops.birdTimeout = setTimeout(chirpBirds, nextChirp);
+            };
+            chirpBirds();
+        }
+    }
+
+    // Stop all sounds
+    stopAll() {
+        if (this.loops.breeze) {
+            this.loops.breeze.source.stop();
+            this.loops.breeze = null;
+        }
+        if (this.loops.clockInterval) {
+            clearInterval(this.loops.clockInterval);
+            this.loops.clockInterval = null;
+        }
+        if (this.loops.birdTimeout) {
+            clearTimeout(this.loops.birdTimeout);
+            this.loops.birdTimeout = null;
+        }
+    }
+
+    toggle() {
+        this.enabled = !this.enabled;
+        if (this.enabled) {
+            if (this.audioContext.state === 'suspended') {
+                this.audioContext.resume();
+            }
+            this.startAmbience();
+        } else {
+            this.stopAll();
+        }
+        return this.enabled;
+    }
+
+    playSound(type) {
+        if (!this.enabled || !this.audioContext) return;
+
+        switch(type) {
+            case 'door':
+                this.createDoorSound();
+                break;
+            case 'water':
+                this.createWaterSound();
+                break;
+            case 'transition':
+                this.createTransitionSound();
+                break;
+        }
+    }
+}
+
+const audioManager = new AudioManager();
+
 // ===== GAME STATE =====
 const gameState = {
     playerPosition: { x: 0, y: 1.6, z: 0 },
@@ -495,8 +748,12 @@ function createPainting() {
 }
 
 // ===== INITIALIZE SCENE =====
-function initScene() {
+async function initScene() {
     document.getElementById('debug').textContent = 'Building scene...';
+
+    // Initialize audio system
+    await audioManager.init();
+
     setupLighting();
     createRoom();
     createDesk();
@@ -801,6 +1058,7 @@ function cancelCode() {
 function endingFallOfLight() {
     hideNarrative();
     gameState.ended = true;
+    audioManager.playSound('transition');
 
     const overlay = document.getElementById('ending-overlay');
     overlay.classList.add('active', 'fade');
@@ -816,6 +1074,8 @@ function endingFallOfLight() {
 function endingDispersedMemory() {
     hideNarrative();
     gameState.ended = true;
+    audioManager.playSound('door');
+    setTimeout(() => audioManager.playSound('transition'), 500);
 
     const overlay = document.getElementById('ending-overlay');
     overlay.classList.add('active', 'fade');
@@ -831,6 +1091,9 @@ function endingDispersedMemory() {
 function endingWaterOfRebirth() {
     hideNarrative();
     gameState.ended = true;
+    audioManager.playSound('door');
+    setTimeout(() => audioManager.playSound('water'), 500);
+    setTimeout(() => audioManager.playSound('transition'), 1000);
 
     const overlay = document.getElementById('ending-overlay');
     overlay.classList.add('active', 'fade');
@@ -850,6 +1113,8 @@ function endingWaterOfRebirth() {
 
 function endingGentleCage() {
     gameState.ended = true;
+    audioManager.playSound('door');
+    setTimeout(() => audioManager.playSound('transition'), 500);
 
     const overlay = document.getElementById('ending-overlay');
     overlay.classList.add('active', 'fade');
@@ -891,6 +1156,13 @@ window.addEventListener('keyup', (e) => {
 
 canvas.addEventListener('mousedown', (e) => {
     if (e.button === 0) {
+        // Start audio on first user interaction
+        if (audioManager.audioContext && audioManager.audioContext.state === 'suspended') {
+            audioManager.audioContext.resume().then(() => {
+                audioManager.startAmbience();
+            });
+        }
+
         if (gameState.currentInteractable) {
             handleInteraction();
         } else {
@@ -924,6 +1196,26 @@ document.getElementById('code-input').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') submitCode();
 });
 document.getElementById('restart-btn').addEventListener('click', restartGame);
+
+// Audio toggle button
+document.getElementById('audio-toggle').addEventListener('click', () => {
+    const enabled = audioManager.toggle();
+    const btn = document.getElementById('audio-toggle');
+    btn.textContent = enabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+});
+
+// Start audio on any keypress (for browsers that block autoplay)
+let audioStarted = false;
+window.addEventListener('keydown', () => {
+    if (!audioStarted && audioManager.audioContext) {
+        if (audioManager.audioContext.state === 'suspended') {
+            audioManager.audioContext.resume().then(() => {
+                audioManager.startAmbience();
+                audioStarted = true;
+            });
+        }
+    }
+}, { once: true });
 
 // ===== ANIMATION LOOP =====
 let lastTime = 0;
