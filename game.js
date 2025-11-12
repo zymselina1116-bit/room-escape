@@ -6,6 +6,7 @@ if (typeof THREE === 'undefined') {
 }
 
 console.log('THREE.js loaded successfully:', THREE.REVISION);
+document.getElementById('debug').textContent = 'THREE.js loaded: ' + THREE.REVISION;
 
 // ===== GAME STATE =====
 const gameState = {
@@ -495,6 +496,7 @@ function createPainting() {
 
 // ===== INITIALIZE SCENE =====
 function initScene() {
+    document.getElementById('debug').textContent = 'Building scene...';
     setupLighting();
     createRoom();
     createDesk();
@@ -504,6 +506,16 @@ function initScene() {
     createDoor('doorB', [-4.9, 1.25, 2], Math.PI / 2);
     createBookshelf();
     createPainting();
+    document.getElementById('debug').textContent = 'Scene ready! Controls: WASD/Arrows + Mouse';
+
+    // Hide debug after 3 seconds
+    setTimeout(() => {
+        const debugEl = document.getElementById('debug');
+        if (debugEl) debugEl.style.opacity = '0';
+        setTimeout(() => {
+            if (debugEl) debugEl.style.display = 'none';
+        }, 1000);
+    }, 3000);
 }
 
 // ===== PLAYER CONTROLS =====
