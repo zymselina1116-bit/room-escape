@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Simple 3D Test</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Loading...</div>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script>
+        document.getElementById('info').textContent = 'THREE.js loaded: v' + THREE.REVISION;
+
+        // Create scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+
+        // Create camera
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5;
+
+        // Create renderer
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Create a cube
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshBasicMaterial({ color: 0xff6600 });
+        const cube = new THREE.Mesh(geometry, material);
+        scene.add(cube);
+
+        // Add light
+        const light = new THREE.PointLight(0xffffff, 1, 100);
+        light.position.set(5, 5, 5);
+        scene.add(light);
+
+        document.getElementById('info').textContent = 'Scene ready! You should see a rotating orange cube.';
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            cube.rotation.x += 0.01;
+            cube.rotation.y += 0.01;
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

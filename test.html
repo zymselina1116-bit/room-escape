@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body style="margin: 0; background: #333; color: white; font-family: monospace; padding: 20px;">
+    <h1>Loading Test</h1>
+    <div id="status">1. HTML loaded</div>
+
+    <script>
+        document.getElementById('status').innerHTML += '<br>2. Basic JS works';
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+    <script>
+        if (typeof THREE !== 'undefined') {
+            document.getElementById('status').innerHTML += '<br>3. THREE.js loaded: v' + THREE.REVISION;
+        } else {
+            document.getElementById('status').innerHTML += '<br>3. ERROR: THREE.js failed to load!';
+        }
+    </script>
+
+    <script src="game.js"></script>
+</body>
+</html>
