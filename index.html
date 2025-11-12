@@ -38,33 +38,6 @@
             pointer-events: none;
         }
 
-        #instructions {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.85);
-            padding: 15px 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            max-width: 500px;
-            pointer-events: auto;
-        }
-
-        #instructions h2 {
-            color: #8b7355;
-            margin-bottom: 10px;
-            font-size: 1.4em;
-        }
-
-        #instructions p {
-            color: #5a4a3a;
-            line-height: 1.6;
-            margin: 5px 0;
-            font-size: 0.9em;
-        }
-
         #narrative {
             position: absolute;
             bottom: 30px;
@@ -312,14 +285,8 @@
         <div id="loading">Loading Dream Room...</div>
         <canvas id="canvas"></canvas>
         <div id="ui">
-            <div id="instructions">
-                <h2>🌟 Dream Room Escape 🌟</h2>
-                <p><strong>Move:</strong> Arrow Keys or WASD</p>
-                <p><strong>Look:</strong> Hold Mouse and Drag</p>
-                <p><strong>Interact:</strong> Click on glowing objects</p>
-            </div>
             <div id="crosshair"></div>
-            <div id="interaction-hint">Press E to interact</div>
+            <div id="interaction-hint">Click to interact</div>
             <div id="narrative">
                 <h3 id="narrative-title"></h3>
                 <p id="narrative-text"></p>
